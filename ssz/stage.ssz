@@ -471,7 +471,7 @@ public &Stage
       }
       i++;
     while i < #`bg:
-      if(zlink >= 0) .com.cam.stg.zoffset += (int)(`bg[zlink].starty*`yscale);
+      if(zlink >= 0) .com.cam.stg.zoffset += (`bg[zlink].starty*`yscale);
     }
     .com.cam.stg.drawOffsetY =
       (float).com.cam.stg.localw/(float).com.cam.stg.localh

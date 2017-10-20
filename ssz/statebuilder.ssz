@@ -34,7 +34,7 @@ const ^/char kuuhaktokigou = " !()-,[]:"\"\t\r\n + enzansiMoji;
   LifeAdd, LifeSet, PowerAdd, PowerSet,
   TargetLifeAdd, TargetBind, BindToTarget, TargetState,
   TargetVelSet, TargetVelAdd, TargetFacing,
-  TargetPowerAdd, TargetDrop,
+  TargetPowerAdd, TargetDrop, TargetVarSet, TargetVarAdd,
   HitBy, NotHitBy, AttackMulSet, DefenceMulSet,
   MoveHitReset,
   AssertSpecial, PosFreeze, PlayerPush, Gravity,
@@ -58,6 +58,7 @@ const ^/char kuuhaktokigou = " !()-,[]:"\"\t\r\n + enzansiMoji;
   VictoryQuote,
   RemapPal,
   Zoom,
+  WinAdd,
   Null
 }
 &StateCtrl
@@ -82,6 +83,7 @@ const ^/char kuuhaktokigou = " !()-,[]:"\"\t\r\n + enzansiMoji;
   public int ignorehitpause;
   public int persistent;
   public int no;
+  public int dodge;
   public bool i;
   new()
   {
@@ -98,6 +100,7 @@ const ^/char kuuhaktokigou = " !()-,[]:"\"\t\r\n + enzansiMoji;
     `hitdefpersist = 0;
     `movehitpersist = 0;
     `juggle = 0;
+	`dodge = 0;
   }
   public void tmpreset()
   {
@@ -1388,7 +1391,7 @@ public &StateBuilder
       out .= obj .= "trP2Life()";
       typ = 0;
     cond .s.equ("lifemax", token):
-      out .= obj .= "sysivar[.iLIFEMAX]";
+      out .= '(' .= obj .= "sysivar[.iLIFEMAX]-" .= obj .= "sysivar[.iLIFEPENALTY])";
       typ = 2;
     cond .s.equ("power", token):
       out .= obj .= "getSharePower()";
@@ -1849,6 +1852,21 @@ public &StateBuilder
     cond .s.equ("stateno", token):
       out .= obj .= "stVal.no";
       typ = 2;
+    cond .s.equ("stateowner", token):
+      out .= obj .= "stVal.playerno+1";
+      typ = 2;
+    cond .s.equ("dodge", token):
+      out .= obj .= "stVal.hb.dodge";
+      typ = 2;
+    cond .s.equ("playerno", token):
+      out .= obj .= "playerno+1";
+      typ = 2;
+    cond .s.equ("pause", token):
+      out .= ".pause";
+      typ = 2;
+    cond .s.equ("super", token):
+      out .= ".super";
+      typ = 2;
     cond .s.equ("p2stateno", token):
       out .= obj .= "trP2StateNo()";
       typ = 0;
@@ -1952,6 +1970,9 @@ public &StateBuilder
         typ = 2;
       cond .s.equ("damage", token):
         out .= obj .= "stVal.hb.damage";
+        typ = 2;
+      cond .s.equ("maxlifedamage", token):
+        out .= obj .= "stVal.hb.maxlifedamage";
         typ = 2;
       cond .s.equ("hitcount", token):
         out .= obj .= "stVal.hb.hitcount";
@@ -2121,6 +2142,9 @@ public &StateBuilder
     cond .s.equ("noko", token):
       out .= ".gs(.gsNOKO)";
       typ = 3;
+    cond .s.equ("unkillable", token):
+      out .= "`ls(.lsUNKILLABLE)";
+      typ = 3;
     cond .s.equ("active", token):
       out .= obj .= "isActive()";
       typ = 3;
@@ -2271,6 +2295,9 @@ public &StateBuilder
       typ = 2;
     cond .s.equ("moveguarded", token):
       out .= obj .= "trMoveGuarded()";
+      typ = 2;
+    cond .s.equ("movedodged", token):
+      out .= obj .= "trMoveDodged()";
       typ = 2;
     cond .s.equ("roundstate", token):
       out .= obj .= "roundState()";
@@ -3131,7 +3158,8 @@ public &StateBuilder
         if(!`posvelSet(am=)) ret false;
       case
         .CtrlTy::VarSet, .CtrlTy::VarAdd,
-        .CtrlTy::ParentVarSet, .CtrlTy::ParentVarAdd
+        .CtrlTy::ParentVarSet, .CtrlTy::ParentVarAdd,
+		.CtrlTy::TargetVarSet, .CtrlTy::TargetVarAdd
         :
         if(!`varSet(am=)) ret false;
       case .CtrlTy::VarRangeSet:
@@ -3260,6 +3288,8 @@ public &StateBuilder
         if(!`remapPal(am=)) ret false;
       case .CtrlTy::Zoom:
         if(!`zoom(am=)) ret false;
+      case .CtrlTy::WinAdd:
+        if(!`winAdd(am=)) ret false;
       default:
         {
           bool error = false;
@@ -3479,6 +3509,15 @@ public &StateBuilder
         ret true;
       }])) ret false;
       if(`state.hitdefpersist == 0) `state.deftask .= "`clearHitDef();";
+      if(!`stateParam(param=, "dodge", [`paraF_t(data=){
+        if(
+          !`fullExpression(
+            `state.deftask=, data=, "if(!(",
+            "))`clearDodge();", 3)) ret false;
+        `state.dodge = 1;
+        ret true;
+      }])) ret false;
+      if(`state.dodge == 0) `state.deftask .= "`clearDodge();";
       if(!`stateParam(param=, "sprpriority", [`paraF_t(data=){
         if(
           !`fullExpression(
@@ -3668,10 +3707,24 @@ public &StateBuilder
         || `state.ctrlList[-1].typ == .CtrlTy::ParentVarAdd;
       bool add =
         `state.ctrlList[-1].typ == .CtrlTy::VarAdd
-        || `state.ctrlList[-1].typ == .CtrlTy::ParentVarAdd;
-      if(par){
+        || `state.ctrlList[-1].typ == .CtrlTy::ParentVarAdd
+		|| `state.ctrlList[-1].typ == .CtrlTy::TargetVarAdd;
+	  bool targeted = 
+        `state.ctrlList[-1].typ == .CtrlTy::TargetVarSet
+ 		|| `state.ctrlList[-1].typ == .CtrlTy::TargetVarAdd;
+     if(par){
         `state.ctrlList[-1].task .= "^`self p=`trParent()$.c;if(#p==0)ret;";
       }
+	  if(targeted){
+      `state.ctrlList[-1].task .= "^`self c=`trTarget(-1)$.c;if(#c==0)ret;";
+      if(!`stateParam(param=, "id", [`paraF_t(data=){
+        if(
+          !`fullExpression(
+            `state.ctrlList[-1].task=, data=,
+            "c=`getTarget(", ");if(#c==0)ret;", 2)) ret false;
+        ret true;
+      }])) ret false;
+	  }
       bool v = false, fv = false, value = false;
       ^/char valexp;
       %char varexp;
@@ -3690,7 +3743,7 @@ public &StateBuilder
       }])) ret false;
       if((v || fv) && value){
         `state.ctrlList[-1].task .=
-          (par ? "p~" : "`") .= (
+          (par ? "p~" : targeted ? "c~" : "`") .= (
             v ? (add ? "trAddIVar(" : "trSetIVar(")
             : (add ? "trAddFVar(" : "trSetFVar("))
           .= varexp .= ',';
@@ -3711,7 +3764,7 @@ public &StateBuilder
           ret false;
         }
         `state.ctrlList[-1].task .=
-          (par ? "p~" : "`") .= (
+          (par ? "p~" : targeted ? "c~" : "`") .= (
             sys ? (
               v ? (add ? "trAddSysIVar(" : "trSetSysIVar(")
               : (add ? "trAddSysFVar(" : "trSetSysFVar("))
@@ -3977,6 +4030,12 @@ public &StateBuilder
   bool hitDef(&.tbl.NameTable!^/char? param=)
   {
     ret `stateSec(param=,[bool(){
+      if(!`stateParam(param=, "slot", [`paraF_t(data=){
+        if(
+          !`fullExpression(
+            `state.ctrlList[-1].task=, data=, "hs=", ";", 2)) ret false;
+        ret true;
+      }])) ret false;
       switch(`state.ctrlList[-1].typ){
       case .CtrlTy::HitDef:
         `state.ctrlList[-1].task .=
@@ -4363,6 +4422,30 @@ public &StateBuilder
             ".hitonce=(int)(", ");", 3)) ret false;
         ret true;
       }])) ret false;
+      if(!`stateParam(param=, "abshit", [`paraF_t(data=){
+        `state.ctrlList[-1].task .= obj;
+        if(
+          !`fullExpression(
+            `state.ctrlList[-1].task=, data=,
+            ".abshit=(int)(", ");", 3)) ret false;
+        ret true;
+      }])) ret false;
+      if(!`stateParam(param=, "nobox", [`paraF_t(data=){
+        `state.ctrlList[-1].task .= obj;
+        if(
+          !`fullExpression(
+            `state.ctrlList[-1].task=, data=,
+            ".nobox=(int)(", ");", 3)) ret false;
+        ret true;
+      }])) ret false;
+      if(!`stateParam(param=, "nohelper", [`paraF_t(data=){
+        `state.ctrlList[-1].task .= obj;
+        if(
+          !`fullExpression(
+            `state.ctrlList[-1].task=, data=,
+            ".nohelper=(int)(", ");", 3)) ret false;
+        ret true;
+      }])) ret false;
       if(!`stateParam(param=, "air.juggle", [`paraF_t(data=){
         `state.ctrlList[-1].task .= obj;
         if(
@@ -4398,6 +4481,21 @@ public &StateBuilder
             !`fullExpression(
               `state.ctrlList[-1].task=, data=,
               ".guarddamage=", ";", 2)) ret false;
+        }
+        ret true;
+      }])) ret false;
+      if(!`stateParam(param=, "maxlifedamage", [`paraF_t(data=){
+        `state.ctrlList[-1].task .= obj;
+        if(
+          !`argExpression(
+            `state.ctrlList[-1].task=, data=,
+            ".hitmaxlifedamage=", ";", 2)) ret false;
+        if(.s.equ(",")<, `tokenizer(data=)){
+          `state.ctrlList[-1].task .= obj;
+          if(
+            !`fullExpression(
+              `state.ctrlList[-1].task=, data=,
+              ".guardmaxlifedamage=", ";", 2)) ret false;
         }
         ret true;
       }])) ret false;
@@ -4827,18 +4925,48 @@ public &StateBuilder
         }
         ret true;
       }])) ret false;
+      if(!`stateParam(param=, "helperpausetime", [`paraF_t(data=){
+        `state.ctrlList[-1].task .= obj .= ".guard_helperpausetime=" .= obj;
+        if(
+          !`argExpression(
+            `state.ctrlList[-1].task=, data=,
+            ".helperpausetime=", ";", 2)) ret false;
+        if(.s.equ(",")<, `tokenizer(data=)){
+          `state.ctrlList[-1].task .= obj .= ".guard_helpershaketime=" .= obj;
+          if(
+            !`fullExpression(
+              `state.ctrlList[-1].task=, data=,
+              ".helpershaketime=", ";", 2)) ret false;
+        }
+        ret true;
+      }])) ret false;
       if(!`stateParam(param=, "guard.pausetime", [`paraF_t(data=){
-        `state.ctrlList[-1].task .= obj;
+        `state.ctrlList[-1].task .= obj .= ".guard_helperpausetime=" .= obj;
         if(
           !`argExpression(
             `state.ctrlList[-1].task=, data=,
             ".guard_pausetime=", ";", 2)) ret false;
         if(.s.equ(",")<, `tokenizer(data=)){
-          `state.ctrlList[-1].task .= obj;
+          `state.ctrlList[-1].task .= obj .= ".guard_helpershaketime=" .= obj;
           if(
             !`fullExpression(
               `state.ctrlList[-1].task=, data=,
               ".guard_shaketime=", ";", 2)) ret false;
+        }
+        ret true;
+      }])) ret false;
+      if(!`stateParam(param=, "guard.helperpausetime", [`paraF_t(data=){
+        `state.ctrlList[-1].task .= obj;
+        if(
+          !`argExpression(
+            `state.ctrlList[-1].task=, data=,
+            ".guard_helperpausetime=", ";", 2)) ret false;
+        if(.s.equ(",")<, `tokenizer(data=)){
+          `state.ctrlList[-1].task .= obj;
+          if(
+            !`fullExpression(
+              `state.ctrlList[-1].task=, data=,
+              ".guard_helpershaketime=", ";", 2)) ret false;
         }
         ret true;
       }])) ret false;
@@ -5509,7 +5637,7 @@ public &StateBuilder
         `lasterror = "valueが指定されていません";
         ret false;
       }
-      `state.ctrlList[-1].task .= "`addLife((double)va,k!=0,a!=0);";
+      `state.ctrlList[-1].task .= "`addLife((double)va,0.0,k!=0,a!=0);";
       ret true;
     }]);
   }
@@ -5574,7 +5702,7 @@ public &StateBuilder
   {
     ret `stateSec(param=,[bool(){
       `state.ctrlList[-1].task .=
-        "%int tar=`getTarget(-1);if(#tar==0)ret;int va=0,k=1,a=0;";
+        "%int tar=`getTarget(-1);if(#tar==0)ret;int va=0,pv=0,k=1,a=0;";
       if(!`stateParam(param=, "id", [`paraF_t(data=){
         if(
           !`fullExpression(
@@ -5602,11 +5730,18 @@ public &StateBuilder
             `state.ctrlList[-1].task=, data=, "va=", ";", 2)) ret false;
         ret true;
       }])) ret false;
+      if(!`stateParam(param=, "penalty", [`paraF_t(data=){
+        value = true;
+        if(
+          !`fullExpression(
+            `state.ctrlList[-1].task=, data=, "pv=", ";", 2)) ret false;
+        ret true;
+      }])) ret false;
       if(!value){
         `lasterror = "valueが指定されていません";
         ret false;
       }
-      `state.ctrlList[-1].task .= "`trTargetLifeAdd(tar,va,k!=0,a!=0);";
+      `state.ctrlList[-1].task .= "`trTargetLifeAdd(tar,va,pv,k!=0,a!=0);";
       ret true;
     }]);
   }
@@ -5798,6 +5933,124 @@ public &StateBuilder
       ret true;
     }]);
   }
+  bool targetVarSet(&.tbl.NameTable!^/char? param=)
+  {
+    ret `stateSec(param=,[bool(){
+      `state.ctrlList[-1].task .= "%int tar=`getTarget(-1);if(#tar==0)ret;";
+      if(!`stateParam(param=, "id", [`paraF_t(data=){
+        if(
+          !`fullExpression(
+            `state.ctrlList[-1].task=, data=,
+            "tar=`getTarget(", ");if(#tar==0)ret;", 2)) ret false;
+        ret true;
+      }])) ret false;
+		bool add =
+        `state.ctrlList[-1].typ == .CtrlTy::TargetVarAdd;
+      bool v = false, fv = false, value = false;
+      ^/char valexp;
+      %char varexp;
+      if(!`stateParam(param=, "value", [`paraF_t(data=){
+        value = true;
+        valexp = data;
+        ret true;
+      }]))ret false;
+      if(value && !`stateParam(param=, "v", [`paraF_t(data=){
+        v = true;
+        ret `fullExpression(varexp=, data=, "", "", 2);
+      }])) ret false;
+      if(value && !v && !`stateParam(param=, "fv", [`paraF_t(data=){
+        fv = true;
+        ret `fullExpression(varexp=, data=, "", "", 2);
+      }])) ret false;
+      if((v || fv) && value){
+        `state.ctrlList[-1].task .=(
+            v ? (add ? "trTargetAddIVar(tar, " : "trTargetSetIVar(tar, ")
+            : (add ? "trTargetAddFVar(tar, " : "trTargetSetFVar(tar, "))
+          .= varexp .= ',';
+        `errorexp = valexp;
+        if(
+          !`fullExpression(
+            `state.ctrlList[-1].task=, valexp=, "", "", v ? 2 : 1)) ret false;
+        `errorexp = "";
+        `state.ctrlList[-1].task.= ");";
+        ret true;
+      }
+      v = fv = false;
+      bool sys = false;
+      ~$bool(^/char=) set = [bool(^/char data=){
+        data = .s.trim(data);
+        if(data[0] != '('){
+          `lasterror = "'('がありません";
+          ret false;
+        }
+        `state.ctrlList[-1].task .= (
+            sys ? (
+              v ? (add ? "trTargetAddSysIVar(tar, " : "trTargetSetSysIVar(tar, ")
+              : (add ? "trTargetAddSysFVar(tar, " : "trTargetSetSysFVar(tar, "))
+            : (
+              v ? (add ? "trTargetAddIVar(tar, " : "trTargetSetIVar(tar, ")
+              : (add ? "trTargetAddFVar(tar, " : "trTargetSetFVar(tar, ")));
+        if(
+          !`typeExp!`expValue?(
+            `state.ctrlList[-1].task=, data=, 2)) ret false;
+        `state.ctrlList[-1].task .= ',';
+        index f = .s.find("=", data);
+        if(f < 0){
+          `lasterror = "'='がありません";
+          ret false;
+        }
+        data = data[f+1..-1];
+        if(
+          !`fullExpression(
+            `state.ctrlList[-1].task=, data=, "", "", v ? 2 : 1)) ret false;
+        `state.ctrlList[-1].task.= ");";
+        ret true;
+      }];
+      if(!value && !`stateParam(param=, "var", [`paraF_t(data=){
+        if(data[0] != 'v'){
+          `lasterror = data[0..3] + "の'v'が小文字でありません";
+          ret false;
+        }
+        data = data[3..-1];
+        value = true;
+        v = true;
+        ret set(:data=:);
+      }])) ret false;
+      if(!value && !`stateParam(param=, "fvar", [`paraF_t(data=){
+        if(data[0] != 'f'){
+          `lasterror = data[0..4] + "の'f'が小文字でありません";
+          ret false;
+        }
+        data = data[4..-1];
+        value = true;
+        fv = true;
+        ret set(:data=:);
+      }])) ret false;
+      if(!value && !`stateParam(param=, "sysvar", [`paraF_t(data=){
+        if(data[3] != 'v'){
+          `lasterror = data[0..6] + "の'v'が小文字でありません";
+          ret false;
+        }
+        data = data[6..-1];
+        value = true;
+        v = true;
+        sys = true;
+        ret set(:data=:);
+      }])) ret false;
+      if(!value && !`stateParam(param=, "sysfvar", [`paraF_t(data=){
+        data = data[7..-1];
+        value = true;
+        fv = true;
+        sys = true;
+        ret set(:data=:);
+      }])) ret false;
+      if(!value){
+        `lasterror = "valueが指定されていません";
+        ret false;
+      }
+      ret true;
+    }]);
+  }
   bool hitBy(&.tbl.NameTable!^/char? param=)
   {
     ret `stateSec(param=,[bool(){
@@ -5835,6 +6088,20 @@ public &StateBuilder
       if(!time){
         `state.ctrlList[-1].task .=
           (ni ? "`stVal.hb.hitt2=1;" : "`stVal.hb.hitt1=1;");
+      }
+	  bool dodge = false;
+      if(!`stateParam(param=, "dodge", [`paraF_t(data=){
+        dodge = true;
+        if(
+          !`fullExpression(
+            `state.ctrlList[-1].task=, data=,
+            ("`stVal.hb.dodge="),
+            ";", 2)) ret false;
+        ret true;
+      }])) ret false;
+      if(!dodge){
+        `state.ctrlList[-1].task .=
+          ("`stVal.hb.dodge=0;");
       }
       ret true;
     }]);
@@ -5943,6 +6210,9 @@ public &StateBuilder
             "`sysivar[.iSPECIALFLAG]|=.lsNOJUGGLECHECK;";
         cond .s.equ(text, "noko"):
           `state.ctrlList[-1].task .= ".specialFlag|=.gsNOKO;";
+        cond .s.equ(text, "unkillable"):
+          `state.ctrlList[-1].task .=
+            "`sysivar[.iSPECIALFLAG]|=.lsUNKILLABLE;";
         else:
           `lasterror = data + "が無効な値です";
           ret false;
@@ -7755,6 +8025,26 @@ public &StateBuilder
       ret true;
     }]);
   }
+  bool winAdd(&.tbl.NameTable!^/char? param=)
+  {
+    ret `stateSec(param=,[bool(){
+      `state.ctrlList[-1].task .= "int t1=0,t2=0;";
+      if(!`stateParam(param=, "p1", [`paraF_t(data=){
+        if(
+          !`fullExpression(
+            `state.ctrlList[-1].task=, data=, "t1=", ";", 2)) ret false;
+        ret true;
+      }])) ret false;
+      if(!`stateParam(param=, "p2", [`paraF_t(data=){
+        if(
+          !`fullExpression(
+            `state.ctrlList[-1].task=, data=, "t2=", ";", 2)) ret false;
+        ret true;
+      }])) ret false;
+	  `state.ctrlList[-1].task .= "`winAdd(t1,t2);";
+      ret true;
+    }]);
+  }
   ^/char stateBulid(%char buf=, ^/char def, ^/char st=)
   {:<-
     public bool statedef(^/char sec, ^/char name, ^/char data)
@@ -7849,6 +8139,10 @@ public &StateBuilder
           `state.ctrlList[-1].typ = .CtrlTy::TargetPowerAdd;
         cond .s.equ(s, "targetdrop"):
           `state.ctrlList[-1].typ = .CtrlTy::TargetDrop;
+        cond .s.equ(s, "targetvarset"):
+          `state.ctrlList[-1].typ = .CtrlTy::TargetVarSet;
+        cond .s.equ(s, "targetvaradd"):
+          `state.ctrlList[-1].typ = .CtrlTy::TargetVarAdd;
         cond .s.equ(s, "hitby"):
           `state.ctrlList[-1].typ = .CtrlTy::HitBy;
         cond .s.equ(s, "nothitby"):
@@ -7955,6 +8249,8 @@ public &StateBuilder
           `state.ctrlList[-1].typ = .CtrlTy::RemapPal;
         cond .s.equ(s, "zoom"):
           `state.ctrlList[-1].typ = .CtrlTy::Zoom;
+        cond .s.equ(s, "winadd"):
+          `state.ctrlList[-1].typ = .CtrlTy::WinAdd;
         cond .s.equ(s, "null"):
           `state.ctrlList[-1].typ = .CtrlTy::Null;
         else:
@@ -8937,6 +9233,8 @@ public &StateBuilder
       \t"`state_1 = `s_1_" .= ''`playerno .= "P;"\r\n
       \t"`state_2 = `s_2_" .= ''`playerno .= "P;"\r\n
       \t"`state_3 = `s_3_" .= ''`playerno .= "P;"\r\n
+      \t"`state_4 = `s_4_" .= ''`playerno .= "P;"\r\n
+      \t"`state_5 = `s_5_" .= ''`playerno .= "P;"\r\n
       \t"`state_i1 = `s_I1_" .= ''`playerno .= "P;"\r\n
       \t"`clearSpSysVar();"\r\n
       "}"\r\n;

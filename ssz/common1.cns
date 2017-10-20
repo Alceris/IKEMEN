@@ -119,10 +119,10 @@ SSZ_CODE:
 void c.Char::s##_@@P()
 {
   if(!`isHitPaused()){
-    if(`commandByName("holdfwd")){
+    if(`commandByName("holdfwd") && !`commandByName("holdback")){
       `setXV(`sysfvar[.fWALK_FWD]);
     }
-    if(`commandByName("holdback")){
+    if(`commandByName("holdback") && !`commandByName("holdfwd")){
       `setXV(`sysfvar[.fWALK_BACK]);
     }
     if(
@@ -160,8 +160,8 @@ void c.Char::s##_@@P()
 {
   if(!`isHitPaused()){
     if(`stVal.time == 0) `sysivar[1] = 0;
-    if(`commandByName("holdfwd")) `sysivar[1] = 1;
-    if(`commandByName("holdback")) `sysivar[1] = -1;
+    if(`commandByName("holdfwd") && !`commandByName("holdback")) `sysivar[1] = 1;
+    if(`commandByName("holdback") && !`commandByName("holdfwd")) `sysivar[1] = -1;
     if(`trAnimTime() == 0){
       branch{
       cond `stVal.prevno == 100 && `sysivar[1] == 1:
@@ -204,8 +204,8 @@ void c.Char::s##_@@P()
       `trChangeAnim(41);
     }
     if(`stVal.time == 0) `sysivar[1] = 0;
-    if(`commandByName("holdfwd")) `sysivar[1] = 1;
-    if(`commandByName("holdback")) `sysivar[1] = -1;
+    if(`commandByName("holdfwd") && !`commandByName("holdback")) `sysivar[1] = 1;
+    if(`commandByName("holdback") && !`commandByName("holdfwd")) `sysivar[1] = -1;
     if(`stVal.time == 2){
       `setXV(
         `sysivar[1] == 0 ? `sysfvar[.fAIRJUMP_NEUX] : (

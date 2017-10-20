@@ -10,7 +10,7 @@ lib file = <file.ssz>;
 lib se = <alpha/sdlevent.ssz>;
 
 
-public int roundTime = 999 * 6;
+public int roundTime = -1;
 public float life = 1.0;
 public float team1VS2Life = 1.0;
 public float turnsRecoveryRate = 1.0 / 300.0;
@@ -333,7 +333,7 @@ public &Camera
     public int overdrawlow;
     public int localw, localh;
     public float localscl, drawOffsetY;
-    public int zoffset;
+    public float zoffset;
     public float ztopscale;
     public void clear()
     {
@@ -349,7 +349,7 @@ public &Camera
       `localh = 240;
       `localscl = (float).GameWidth / (float)`localw;
       `drawOffsetY = 0.0;
-      `zoffset = 0;
+      `zoffset = 0.0;
       `ztopscale = 1.0;
     }
   }
@@ -393,7 +393,7 @@ public &Camera
       .m.max!float?(`zoomMin)<, .m.min!float?(`zoomMax)<,
       .m.max!float?(xminscl, yminscl);
     `screenZoff =
-      (float)`stg.zoffset * `stg.localscl - `stg.drawOffsetY + 240.0 
+      `stg.zoffset * `stg.localscl - `stg.drawOffsetY + 240.0 
       - (float).GameWidth * (float)`stg.localh / (float)`stg.localw;
   }
   public void update<stg_t>(float scl, float x, float y, stg_t stg=)
@@ -401,7 +401,7 @@ public &Camera
     `scale = `baseScale() * scl;
     `zoff =
       scl * (
-        (float)`stg.zoffset * `stg.localscl - `stg.drawOffsetY
+        `stg.zoffset * `stg.localscl - `stg.drawOffsetY
         + (240.0 - (float).GameWidth*(float)`stg.localh / (float)`stg.localw)
         + (float)(.GameHeight - 240))
       + (1.0 - scl) * (float).GameHeight;
