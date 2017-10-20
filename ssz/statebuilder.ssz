@@ -141,8 +141,8 @@ const ^/char kuuhaktokigou = " !()-,[]:"\"\t\r\n + enzansiMoji;
     `guard_sparkno = 40;
     `ko_echo = 0;
     `volume = 256;
-    `intpersistindex = 0;
-    `floatpersistindex = 0;
+    `intpersistindex = 60;
+    `floatpersistindex = 40;
   }
 }
 &Size
@@ -6115,8 +6115,7 @@ public &StateBuilder
         if(
           !`fullExpression(
             `state.ctrlList[-1].task=, data=,
-            "`attackmul=((float)`sysivar[.iATTACK]/100.0)*",
-            ";", 1)) ret false;
+            "`attackmult=" , ";", 1)) ret false;
         ret true;
       }])) ret false;
       if(!value){
@@ -6135,8 +6134,7 @@ public &StateBuilder
         if(
           !`fullExpression(
             `state.ctrlList[-1].task=, data=,
-            "`defencemul=(float)`sysivar[.iDEFENCE]/(",
-            "*100.0);", 1)) ret false;
+            "`defencemult=" , ";", 1)) ret false;
         ret true;
       }])) ret false;
       if(!value){
