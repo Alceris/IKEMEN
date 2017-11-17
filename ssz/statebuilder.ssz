@@ -3158,8 +3158,7 @@ public &StateBuilder
         if(!`posvelSet(am=)) ret false;
       case
         .CtrlTy::VarSet, .CtrlTy::VarAdd,
-        .CtrlTy::ParentVarSet, .CtrlTy::ParentVarAdd,
-		.CtrlTy::TargetVarSet, .CtrlTy::TargetVarAdd
+        .CtrlTy::ParentVarSet, .CtrlTy::ParentVarAdd
         :
         if(!`varSet(am=)) ret false;
       case .CtrlTy::VarRangeSet:
@@ -3206,6 +3205,8 @@ public &StateBuilder
         if(!`targetPowerAdd(am=)) ret false;
       case .CtrlTy::TargetDrop:
         if(!`targetDrop(am=)) ret false;
+	  case .CtrlTy::TargetVarSet, .CtrlTy::TargetVarAdd:
+        if(!`targetVarSet(am=)) ret false;
       case .CtrlTy::HitBy, .CtrlTy::NotHitBy:
         if(!`hitBy(am=)) ret false;
       case .CtrlTy::AttackMulSet:
@@ -3709,22 +3710,9 @@ public &StateBuilder
         `state.ctrlList[-1].typ == .CtrlTy::VarAdd
         || `state.ctrlList[-1].typ == .CtrlTy::ParentVarAdd
 		|| `state.ctrlList[-1].typ == .CtrlTy::TargetVarAdd;
-	  bool targeted = 
-        `state.ctrlList[-1].typ == .CtrlTy::TargetVarSet
- 		|| `state.ctrlList[-1].typ == .CtrlTy::TargetVarAdd;
      if(par){
         `state.ctrlList[-1].task .= "^`self p=`trParent()$.c;if(#p==0)ret;";
       }
-	  if(targeted){
-      `state.ctrlList[-1].task .= "^`self c=`trTarget(-1)$.c;if(#c==0)ret;";
-      if(!`stateParam(param=, "id", [`paraF_t(data=){
-        if(
-          !`fullExpression(
-            `state.ctrlList[-1].task=, data=,
-            "c=`getTarget(", ");if(#c==0)ret;", 2)) ret false;
-        ret true;
-      }])) ret false;
-	  }
       bool v = false, fv = false, value = false;
       ^/char valexp;
       %char varexp;
@@ -3743,7 +3731,7 @@ public &StateBuilder
       }])) ret false;
       if((v || fv) && value){
         `state.ctrlList[-1].task .=
-          (par ? "p~" : targeted ? "c~" : "`") .= (
+          (par ? "p~" : "`") .= (
             v ? (add ? "trAddIVar(" : "trSetIVar(")
             : (add ? "trAddFVar(" : "trSetFVar("))
           .= varexp .= ',';
@@ -3764,7 +3752,7 @@ public &StateBuilder
           ret false;
         }
         `state.ctrlList[-1].task .=
-          (par ? "p~" : targeted ? "c~" : "`") .= (
+          (par ? "p~" : "`") .= (
             sys ? (
               v ? (add ? "trAddSysIVar(" : "trSetSysIVar(")
               : (add ? "trAddSysFVar(" : "trSetSysFVar("))
@@ -5963,7 +5951,7 @@ public &StateBuilder
         ret `fullExpression(varexp=, data=, "", "", 2);
       }])) ret false;
       if((v || fv) && value){
-        `state.ctrlList[-1].task .=(
+        `state.ctrlList[-1].task .= "`" .=(
             v ? (add ? "trTargetAddIVar(tar, " : "trTargetSetIVar(tar, ")
             : (add ? "trTargetAddFVar(tar, " : "trTargetSetFVar(tar, "))
           .= varexp .= ',';
@@ -5983,7 +5971,7 @@ public &StateBuilder
           `lasterror = "'('がありません";
           ret false;
         }
-        `state.ctrlList[-1].task .= (
+        `state.ctrlList[-1].task .= "`" .=(
             sys ? (
               v ? (add ? "trTargetAddSysIVar(tar, " : "trTargetSetSysIVar(tar, ")
               : (add ? "trTargetAddSysFVar(tar, " : "trTargetSetSysFVar(tar, "))
